@@ -13,7 +13,13 @@ MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", "20"))
 
 class CrawlRequest(BaseModel):
     url: str
-    
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 
 class UrlList(BaseModel):
     urls: list[str]
