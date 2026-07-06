@@ -1,0 +1,494 @@
+{
+  "name": "webite-bot",
+  "nodes": [
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "website_id",
+                "value": "={{ $json.metadata.website_id }}"
+              },
+              {
+                "name": "url",
+                "value": "={{ $json.metadata.url }}"
+              },
+              {
+                "name": "title ",
+                "value": "={{ $json.metadata.title }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1728,
+        -112
+      ],
+      "id": "558df705-c60c-4769-a8b3-bfa6e6e62e38",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "chunkSize": 1500,
+        "chunkOverlap": 300,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        160
+      ],
+      "id": "ed13ee35-2bab-4a96-8b44-febedd5417a3",
+      "name": "Recursive Character Text Splitter",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const website_id = $input.first().json.metadata.website_id;\n\nreturn [{\n  website_id,\n  chatbot_url: `https://website-bot-frontend-mw3g.onrender.com/bot/${website_id}`\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        -416
+      ],
+      "id": "d8caea66-fc58-4de8-9b90-2e8f961a5337",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pages = $input.first().json.pages;\nconst website_id = $('website-ID').first().json.website_id;\n\nreturn pages\n  .filter(page => page.markdown)\n  .map(page => ({\n    json: {\n      text: page.markdown,\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        -320
+      ],
+      "id": "6c5fef1c-5abb-411d-8575-3155661d763f",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/home",
+        "responseMode": "streaming",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        -416
+      ],
+      "id": "910531dd-1e79-4875-8186-a95da6808ab3",
+      "name": "Webhook",
+      "webhookId": "8ab6c55e-719b-45cf-9a10-f8f94a700491"
+    },
+    {
+      "parameters": {
+        "tableId": "websites",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -288
+      ],
+      "id": "ecf809ab-f733-4384-ad8d-15ab74adcced",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "CbQMqp8U22KtoXNU",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "crawled_pages",
+        "filterType": "string",
+        "filterString": "=metadata->>website_id=eq.{{ $json.website_id }}"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -96
+      ],
+      "id": "3c5a9d1a-1b8e-4c2a-9f0e-6d2b7f4a9e11",
+      "name": "Delete Old Pages",
+      "credentials": {
+        "supabaseApi": {
+          "id": "CbQMqp8U22KtoXNU",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6b60a0f0-9bd7-46c1-aaf6-d78788070b2f",
+              "name": "pages",
+              "value": "={{ $json.pages }}",
+              "type": "array"
+            },
+            {
+              "id": "5620783a-635e-4c68-8bae-c146b78a4e7c",
+              "name": "website_id",
+              "value": "={{ $('domain-url/wesiteID').item.json.website_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1104,
+        -304
+      ],
+      "id": "e3c2df42-2e8d-4946-9212-681e126133ab",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "crawled_pages",
+          "mode": "list",
+          "cachedResultName": "crawled_pages"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        -448
+      ],
+      "id": "58824734-dd9f-45cc-8df6-6cdcb57e8721",
+      "name": "Supabase Vector Store",
+      "credentials": {
+        "supabaseApi": {
+          "id": "CbQMqp8U22KtoXNU",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -224
+      ],
+      "id": "36983218-d513-459c-99e5-a5df8f0f513c",
+      "name": "Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "MdByN8Y0MFGPvNY7",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "007f7bc0-1791-41c0-8f58-4dfdedd79f87",
+              "name": "website_id",
+              "value": "={{\n$json.body.url\n.replace(/^https?:\\/\\//,'')\n.replace(/^www\\./,'')\n.replace(/[\\/\\.]/g,'-')\n.replace(/-$/,'')\n}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -448,
+        -544
+      ],
+      "id": "54db0812-8fb5-4076-8bf6-235bfc7ca59a",
+      "name": "website-ID"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "703822e2-3afa-4680-8985-ee1d73bcd592",
+              "name": "source_url",
+              "value": "={{ $json.body.url }}",
+              "type": "string"
+            },
+            {
+              "id": "55434851-5e1e-4160-8003-3a9293702f21",
+              "name": "=website_id",
+              "value": "={{ $json.website_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -176,
+        -528
+      ],
+      "id": "f0daa3a4-05cc-41e7-9aed-92ec36b359d9",
+      "name": "domain-url/wesiteID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://website-bot-crawl-api.onrender.com/discover",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.source_url }}\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "retryOnFail": true,
+      "position": [
+        192,
+        -528
+      ],
+      "id": "32a80e85-8ad7-44a7-9a03-076ab57bd321",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://website-bot-crawl-api.onrender.com/crawl-pages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"urls\": {{ JSON.stringify($json.urls) }}\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "retryOnFail": true,
+      "position": [
+        784,
+        -576
+      ],
+      "id": "c57b4615-0321-4e61-b5a6-f9d1f36f88e9",
+      "name": "HTTP Request1"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1260852.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+            "content-length": "66",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://localhost:5173",
+            "priority": "u=1, i",
+            "referer": "http://localhost:5173/",
+            "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "172.18.0.1",
+            "x-forwarded-host": "n8n.srv1260852.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "01c216529be7",
+            "x-real-ip": "172.18.0.1"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "action": "process-url",
+            "url": "https://www.trinontechnology.com/"
+          },
+          "webhookUrl": "https://n8n.srv1260852.hstgr.cloud/webhook/home",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "website-ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "website-ID": {
+      "main": [
+        [
+          {
+            "node": "domain-url/wesiteID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "domain-url/wesiteID": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete Old Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "64258f15-c089-4274-a559-705427f53514",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "830042d34997a045d927ab8a1dbff213522461c89e76eb98e562a1d0b5b9729e"
+  },
+  "id": "t6Z8wjDjw-hXJcgfnMjgY",
+  "tags": []
+}
