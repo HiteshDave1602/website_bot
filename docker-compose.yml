@@ -168,6 +168,7 @@ services:
     - SECRET_KEY=my-secret-key
     - USE_CRAWL4AI_FALLBACK=true
     - CRAWL_CONCURRENCY=3
+    - CRAWL4AI_CONCURRENCY=1
     - MIN_CONTENT_LENGTH=150
     networks:
       - demo

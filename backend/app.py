@@ -14,6 +14,7 @@ os.environ.setdefault("CRAWL4_AI_BASE_DIRECTORY", tempfile.gettempdir())
 app = FastAPI()
 
 CRAWL_CONCURRENCY = int(os.getenv("CRAWL_CONCURRENCY", "3"))
+CRAWL4AI_CONCURRENCY = int(os.getenv("CRAWL4AI_CONCURRENCY", "1"))
 MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", "20"))
 CRAWL_PAGE_TIMEOUT = int(os.getenv("CRAWL_PAGE_TIMEOUT", "45"))
 CRAWL_TOTAL_TIMEOUT = int(os.getenv("CRAWL_TOTAL_TIMEOUT", "240"))
@@ -241,7 +242,9 @@ async def discover(data: CrawlRequest):
 async def crawl_with_crawl4ai(urls_to_crawl: list[str]) -> list:
     from crawl4ai import AsyncWebCrawler
 
-    semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
+    # A headless Chromium page can use 300-500MB alone, so this runs far more
+    # serialized than the plain-HTTP path to avoid OOM-killing small instances.
+    semaphore = asyncio.Semaphore(CRAWL4AI_CONCURRENCY)
 
     async def crawl_one(crawler, url: str):
         async with semaphore:
