@@ -287,6 +287,14 @@ def format_crawl_result(url: str, page):
         return page, True
 
     if getattr(page, "markdown", None):
+        status_code = getattr(page, "status_code", None)
+        if status_code is not None and not (200 <= status_code < 300):
+            return {
+                "url": url,
+                "status": "failed",
+                "error": f"crawl4ai got HTTP {status_code}",
+                "crawler": "crawl4ai",
+            }, False
         return {
             "url": url,
             "status": "completed",
