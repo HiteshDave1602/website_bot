@@ -17,6 +17,7 @@ CRAWL_CONCURRENCY = int(os.getenv("CRAWL_CONCURRENCY", "3"))
 MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", "20"))
 CRAWL_PAGE_TIMEOUT = int(os.getenv("CRAWL_PAGE_TIMEOUT", "45"))
 CRAWL_TOTAL_TIMEOUT = int(os.getenv("CRAWL_TOTAL_TIMEOUT", "240"))
+USE_CRAWL4AI_FALLBACK = os.getenv("USE_CRAWL4AI_FALLBACK", "").lower() in {"1", "true", "yes"}
 
 
 class CrawlRequest(BaseModel):
@@ -273,16 +274,20 @@ async def crawl_pages(data: UrlList):
     urls_to_crawl = urls[:max_pages]
     skipped_urls = urls[max_pages:]
 
-    try:
-        pages = await asyncio.wait_for(
-            crawl_with_crawl4ai(urls_to_crawl),
-            timeout=CRAWL_TOTAL_TIMEOUT,
-        )
-    except Exception as exc:
-        pages = await crawl_with_simple_html(urls_to_crawl)
-        fallback_reason = f"crawl4ai startup failed: {exc}"
-    else:
-        fallback_reason = None
+    pages = await crawl_with_simple_html(urls_to_crawl)
+    fallback_reason = None
+
+    if USE_CRAWL4AI_FALLBACK and any(
+        page.get("status") == "failed" for page in pages if isinstance(page, dict)
+    ):
+        try:
+            pages = await asyncio.wait_for(
+                crawl_with_crawl4ai(urls_to_crawl),
+                timeout=CRAWL_TOTAL_TIMEOUT,
+            )
+            fallback_reason = "simple-html had failed pages; retried with crawl4ai"
+        except Exception as exc:
+            fallback_reason = f"crawl4ai fallback failed: {exc}"
 
     results = []
     success_count = 0
