@@ -3,6 +3,14 @@ export function normalizeWebsiteId(value) {
 }
 
 export function extractWebsiteIdFromResult(data) {
+  if (Array.isArray(data)) {
+    return extractWebsiteIdFromResult(data[0]);
+  }
+
+  if (data?.json && typeof data.json === 'object') {
+    return extractWebsiteIdFromResult(data.json);
+  }
+
   if (!data || typeof data !== 'object') {
     return '';
   }

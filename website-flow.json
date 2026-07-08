@@ -1,0 +1,395 @@
+{
+  "name": "website-flow-crawl-api",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/home",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-900, 0],
+      "id": "home-webhook",
+      "name": "Webhook",
+      "webhookId": "8ab6c55e-719b-45cf-9a10-f8f94a700491"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nconst candidates = [\n  body.url,\n  body.website_url,\n  body.website,\n  body.source_url,\n  $json.url,\n  $json.website_url,\n  $json.website,\n  $json.source_url,\n  typeof body === 'string' ? body : '',\n  typeof $json === 'string' ? $json : ''\n];\n\nlet inputUrl = candidates\n  .find(value => typeof value === 'string' && value.trim())\n  ?.trim() || '';\n\nif (!inputUrl && body && typeof body === 'object') {\n  const nested = body.body || body.data || body.payload;\n  if (nested && typeof nested === 'object') {\n    inputUrl = String(nested.url || nested.website_url || nested.website || nested.source_url || '').trim();\n  }\n}\n\nif (!inputUrl) {\n  return [{\n    json: {\n      success: false,\n      statusCode: 400,\n      error: 'Missing required field: url',\n      received_keys: Object.keys($json || {}),\n      body_keys: body && typeof body === 'object' ? Object.keys(body) : []\n    }\n  }];\n}\n\ninputUrl = inputUrl\n  .replace(/^['\\\"]|['\\\"]$/g, '')\n  .replace(/[\\u200B-\\u200D\\uFEFF]/g, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = new URL(/^https?:\\/\\//i.test(inputUrl) ? inputUrl : `https://${inputUrl}`);\n  if (!parsed.hostname || !parsed.hostname.includes('.')) {\n    throw new Error('URL hostname must include a dot');\n  }\n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      statusCode: 400,\n      error: 'Invalid URL',\n      received_url: inputUrl,\n      detail: error.message\n    }\n  }];\n}\n\nconst source_url = parsed.href.replace(/\\/$/, '');\nconst website_id = parsed.hostname\n  .replace(/^www\\./i, '')\n  .replace(/[^a-zA-Z0-9]+/g, '-')\n  .replace(/^-|-$/g, '')\n  .toLowerCase();\n\nreturn [{ json: { success: true, source_url, website_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-680, 0],
+      "id": "normalize-request",
+      "name": "Normalize Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "request-ok",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-460, 0],
+      "id": "valid-request",
+      "name": "Valid Request?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 400 }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-220, 200],
+      "id": "respond-invalid-request",
+      "name": "Respond Invalid Request"
+    },
+    {
+      "parameters": {
+        "tableId": "websites",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-220, -260],
+      "id": "create-website-row",
+      "name": "Create Website Row",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "crawled_pages",
+        "filterType": "string",
+        "filterString": "=metadata->>website_id=eq.{{ $json.website_id }}"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [-220, -80],
+      "id": "delete-old-pages",
+      "name": "Delete Old Pages",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://website-bot-backend.onrender.com/discover",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.source_url }}\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [-220, 80],
+      "id": "discover-pages",
+      "name": "Discover Pages",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const source_url = $('Normalize Request').first().json.source_url;\nconst website_id = $('Normalize Request').first().json.website_id;\nconst source = new URL(source_url);\nconst origin = source.origin;\nconst rawUrls = Array.isArray($json.urls) ? $json.urls : [];\nconst urls = new Set();\nconst priorityPaths = ['', '/', '/about', '/about-us', '/services', '/products', '/pricing', '/contact', '/contact-us', '/faq'];\n\nfor (const path of priorityPaths) {\n  urls.add(new URL(path, origin).href.replace(/\\/$/, ''));\n}\n\nfor (const rawUrl of rawUrls) {\n  if (!rawUrl || /^(mailto:|tel:|javascript:)/i.test(rawUrl)) continue;\n  try {\n    const url = new URL(rawUrl, origin);\n    const sameDomain = url.hostname.replace(/^www\\./i, '') === source.hostname.replace(/^www\\./i, '');\n    if (!sameDomain || !url.protocol.startsWith('http')) continue;\n    url.hash = '';\n    url.search = '';\n    urls.add(url.href.replace(/\\/$/, ''));\n  } catch (error) {}\n}\n\nreturn [{\n  json: {\n    website_id,\n    source_url,\n    urls: Array.from(urls).slice(0, 20),\n    max_pages: 20\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, 80],
+      "id": "build-crawl-request",
+      "name": "Build Crawl Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://website-bot-backend.onrender.com/crawl-pages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"urls\": {{ JSON.stringify($json.urls) }},\n  \"max_pages\": {{ $json.max_pages }}\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [260, 80],
+      "id": "crawl-pages",
+      "name": "Crawl Pages",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const website_id = $('Build Crawl Request').first().json.website_id;\nconst pages = Array.isArray($json.pages) ? $json.pages : [];\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 50)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, -80],
+      "id": "format-documents",
+      "name": "Format Documents",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const website_id = $('Build Crawl Request').first().json.website_id;\nconst pages = Array.isArray($json.pages) ? $json.pages : [];\nconst successful = pages.filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 50);\nconst text_length = successful.reduce((sum, page) => sum + page.markdown.trim().length, 0);\n\nif (successful.length === 0 || text_length < 50) {\n  return [{\n    json: {\n      success: false,\n      website_id,\n      pages_checked: pages.length,\n      successful_pages: 0,\n      text_length,\n      error: 'The crawl-api did not return enough readable markdown for this website. Check the Crawl Pages node output for failed or empty_content pages.'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    website_id,\n    pages_checked: pages.length,\n    pages_indexed: successful.length,\n    text_length,\n    chatbot_url: `https://website-bot-frontend-mw3g.onrender.com/bot/${website_id}`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 220],
+      "id": "response-logic",
+      "name": "Response Logic"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.success ? 200 : 400 }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 220],
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "value": "crawled_pages",
+          "mode": "list",
+          "cachedResultName": "crawled_pages"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [780, -80],
+      "id": "supabase-vector-store",
+      "name": "Supabase Vector Store",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "website_id",
+                "value": "={{ $json.metadata.website_id }}"
+              },
+              {
+                "name": "url",
+                "value": "={{ $json.metadata.url }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [920, 120],
+      "id": "default-data-loader",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "chunkSize": 1500,
+        "chunkOverlap": 300,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [920, 320],
+      "id": "recursive-character-text-splitter",
+      "name": "Recursive Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [760, 120],
+      "id": "embeddings-google-gemini",
+      "name": "Embeddings Google Gemini"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Request": {
+      "main": [
+        [
+          {
+            "node": "Valid Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Request?": {
+      "main": [
+        [
+          {
+            "node": "Create Website Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete Old Pages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Discover Pages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discover Pages": {
+      "main": [
+        [
+          {
+            "node": "Build Crawl Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Crawl Request": {
+      "main": [
+        [
+          {
+            "node": "Crawl Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crawl Pages": {
+      "main": [
+        [
+          {
+            "node": "Format Documents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Documents": {
+      "main": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response Logic": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
