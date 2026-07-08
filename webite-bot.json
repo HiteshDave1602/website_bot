@@ -308,7 +308,7 @@
       {
         "json": {
           "headers": {
-            "host": "n8n.srv1260852.hstgr.cloud",
+            "host": "kamyapatel.app.n8n.cloud",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
             "content-length": "66",
             "accept": "*/*",
@@ -325,7 +325,7 @@
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "cross-site",
             "x-forwarded-for": "172.18.0.1",
-            "x-forwarded-host": "n8n.srv1260852.hstgr.cloud",
+            "x-forwarded-host": "kamyapatel.app.n8n.cloud",
             "x-forwarded-port": "443",
             "x-forwarded-proto": "https",
             "x-forwarded-server": "01c216529be7",
@@ -337,7 +337,7 @@
             "action": "process-url",
             "url": "https://www.trinontechnology.com/"
           },
-          "webhookUrl": "https://n8n.srv1260852.hstgr.cloud/webhook/home",
+          "webhookUrl": "https://kamyapatel.app.n8n.cloud/webhook/home",
           "executionMode": "production"
         },
         "pairedItem": {

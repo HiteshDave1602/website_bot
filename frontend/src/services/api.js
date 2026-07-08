@@ -1,12 +1,20 @@
 const N8N_WEBHOOK_BASE_URL = import.meta.env.VITE_N8N_WEBHOOK_BASE_URL || '';
 const LEGACY_N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || '';
+const DEFAULT_HOME_WEBHOOK_URL = 'http://localhost:5678/webhook/home';
 
 function isWebhookBaseUrl(url) {
   return /\/webhook(?:-test)?\/?$/i.test(url);
 }
 
 function appendWebhookPath(baseUrl, path) {
-  return `${baseUrl.replace(/\/+$/, '')}/${path}`;
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const cleanPath = path.replace(/^\/+/, '');
+
+  if (new RegExp(`/webhook(?:-test)?/${cleanPath}$`, 'i').test(cleanBaseUrl)) {
+    return cleanBaseUrl;
+  }
+
+  return `${cleanBaseUrl}/${cleanPath}`;
 }
 
 function resolveWebhookUrl(path, explicitUrl) {
@@ -40,7 +48,7 @@ const CHAT_WEBHOOK_URL = resolveWebhookUrl(
     isWebhookBaseUrl(LEGACY_N8N_WEBHOOK_URL) ? '' : LEGACY_N8N_WEBHOOK_URL
   ),
 );
-const HOME_WEBHOOK_URL = resolveWebhookUrl('home', import.meta.env.VITE_N8N_HOME_WEBHOOK_URL);
+const HOME_WEBHOOK_URL = import.meta.env.VITE_N8N_HOME_WEBHOOK_URL || DEFAULT_HOME_WEBHOOK_URL;
 
 async function post(url, payload) {
   const res = await fetch(url, {
