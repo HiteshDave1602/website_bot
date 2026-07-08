@@ -34,6 +34,14 @@ function getWebsiteId(session) {
 }
 
 function extractAssistantText(data) {
+  if (Array.isArray(data)) {
+    return extractAssistantText(data[0]);
+  }
+
+  if (data?.json && typeof data.json === 'object') {
+    return extractAssistantText(data.json);
+  }
+
   if (typeof data === 'string') return data;
   if (!data || typeof data !== 'object') return JSON.stringify(data);
 

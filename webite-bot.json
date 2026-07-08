@@ -263,7 +263,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://website-bot-crawl-api.onrender.com/discover",
+        "url": "https://website-bot-backend.onrender.com/discover",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"url\": \"{{ $json.source_url }}\"\n}",
@@ -284,7 +284,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://website-bot-crawl-api.onrender.com/crawl-pages",
+        "url": "https://website-bot-backend.onrender.com/crawl-pages",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"urls\": {{ JSON.stringify($json.urls) }}\n}",
