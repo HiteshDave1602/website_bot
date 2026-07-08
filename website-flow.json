@@ -144,7 +144,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const website_id = $('Build Crawl Request').first().json.website_id;\nconst pages = Array.isArray($json.pages) ? $json.pages : [];\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 50)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+        "jsCode": "const website_id = $('Build Crawl Request').first().json.website_id;\nconst pages = Array.isArray($json.pages) ? $json.pages : [];\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 150)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -197,6 +197,9 @@
     },
     {
       "parameters": {
+        "dataType": "json",
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
         "textSplittingMode": "custom",
         "options": {
           "metadata": {

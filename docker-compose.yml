@@ -166,6 +166,9 @@ services:
     environment:
     - CRAWL4AI_API_TOKEN=my-secret-token
     - SECRET_KEY=my-secret-key
+    - USE_CRAWL4AI_FALLBACK=true
+    - CRAWL_CONCURRENCY=3
+    - MIN_CONTENT_LENGTH=150
     networks:
       - demo
     ports:

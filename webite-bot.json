@@ -3,6 +3,9 @@
   "nodes": [
     {
       "parameters": {
+        "dataType": "json",
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
         "textSplittingMode": "custom",
         "options": {
           "metadata": {
@@ -14,10 +17,6 @@
               {
                 "name": "url",
                 "value": "={{ $json.metadata.url }}"
-              },
-              {
-                "name": "title ",
-                "value": "={{ $json.metadata.title }}"
               }
             ]
           }
@@ -63,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const pages = $input.first().json.pages;\nconst website_id = $('website-ID').first().json.website_id;\n\nreturn pages\n  .filter(page => page.markdown)\n  .map(page => ({\n    json: {\n      text: page.markdown,\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+        "jsCode": "const pages = $input.first().json.pages;\nconst website_id = $('website-ID').first().json.website_id;\n\nreturn pages\n  .filter(page => typeof page.markdown === 'string' && page.markdown.trim().length >= 150)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -104,6 +103,7 @@
       ],
       "id": "ecf809ab-f733-4384-ad8d-15ab74adcced",
       "name": "Create a row",
+      "continueOnFail": true,
       "credentials": {
         "supabaseApi": {
           "id": "CbQMqp8U22KtoXNU",
