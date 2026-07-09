@@ -14,10 +14,12 @@ os.environ.setdefault("CRAWL4_AI_BASE_DIRECTORY", tempfile.gettempdir())
 app = FastAPI()
 
 CRAWL_CONCURRENCY = int(os.getenv("CRAWL_CONCURRENCY", "3"))
+CRAWL4AI_CONCURRENCY = int(os.getenv("CRAWL4AI_CONCURRENCY", "1"))
 MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", "20"))
 CRAWL_PAGE_TIMEOUT = int(os.getenv("CRAWL_PAGE_TIMEOUT", "45"))
 CRAWL_TOTAL_TIMEOUT = int(os.getenv("CRAWL_TOTAL_TIMEOUT", "240"))
-USE_CRAWL4AI_FALLBACK = os.getenv("USE_CRAWL4AI_FALLBACK", "").lower() in {"1", "true", "yes"}
+USE_CRAWL4AI_FALLBACK = os.getenv("USE_CRAWL4AI_FALLBACK", "true").lower() in {"1", "true", "yes"}
+MIN_CONTENT_LENGTH = int(os.getenv("MIN_CONTENT_LENGTH", "150"))
 
 
 class CrawlRequest(BaseModel):
@@ -151,6 +153,17 @@ async def simple_crawl(url: str) -> dict:
         }
 
 
+def page_is_weak(page) -> bool:
+    if isinstance(page, dict):
+        status = page.get("status")
+        if status in {"failed", "empty_content"}:
+            return True
+        markdown = page.get("markdown")
+        return not markdown or len(markdown.strip()) < MIN_CONTENT_LENGTH
+    markdown = getattr(page, "markdown", None)
+    return not markdown or len(markdown.strip()) < MIN_CONTENT_LENGTH
+
+
 async def discover_with_crawl4ai(url: str):
     from crawl4ai import AsyncWebCrawler
 
@@ -175,43 +188,63 @@ def urls_from_crawl4ai_result(url: str, result) -> list[str]:
 @app.post("/discover")
 async def discover(data: CrawlRequest):
     url = normalize_url(data.url)
+    simple_error = None
+    urls: list[str] = []
 
     try:
         urls = await simple_discover(url)
-        return {
-            "website": url,
-            "pages_found": len(urls),
-            "urls": urls,
-            "crawler": "simple-html",
-        }
+        if len(urls) > 1 or not USE_CRAWL4AI_FALLBACK:
+            return {
+                "website": url,
+                "pages_found": len(urls),
+                "urls": urls,
+                "crawler": "simple-html",
+            }
+        simple_error = "only the homepage was found (likely a JS-rendered site)"
     except Exception as exc:
         simple_error = exc
+
+    if not USE_CRAWL4AI_FALLBACK:
+        raise HTTPException(status_code=502, detail=f"simple discovery failed: {simple_error}")
 
     try:
         result = await asyncio.wait_for(
             discover_with_crawl4ai(url),
             timeout=CRAWL_PAGE_TIMEOUT,
         )
-        urls = urls_from_crawl4ai_result(url, result)
+        crawl4ai_urls = urls_from_crawl4ai_result(url, result)
     except Exception as exc:
+        if urls:
+            return {
+                "website": url,
+                "pages_found": len(urls),
+                "urls": urls,
+                "crawler": "simple-html",
+                "fallback_reason": f"crawl4ai fallback also failed: {exc}",
+            }
         raise HTTPException(
             status_code=502,
             detail=f"simple discovery failed: {simple_error}; crawl4ai failed: {exc}",
         )
 
+    if len(crawl4ai_urls) <= len(urls):
+        crawl4ai_urls = urls
+
     return {
         "website": url,
-        "pages_found": len(urls),
-        "urls": urls,
+        "pages_found": len(crawl4ai_urls),
+        "urls": crawl4ai_urls,
         "crawler": "crawl4ai",
-        "fallback_reason": f"simple discovery failed: {simple_error}",
+        "fallback_reason": f"simple discovery insufficient: {simple_error}",
     }
 
 
 async def crawl_with_crawl4ai(urls_to_crawl: list[str]) -> list:
     from crawl4ai import AsyncWebCrawler
 
-    semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
+    # A headless Chromium page can use 300-500MB alone, so this runs far more
+    # serialized than the plain-HTTP path to avoid OOM-killing small instances.
+    semaphore = asyncio.Semaphore(CRAWL4AI_CONCURRENCY)
 
     async def crawl_one(crawler, url: str):
         async with semaphore:
@@ -239,7 +272,13 @@ async def crawl_with_crawl4ai(urls_to_crawl: list[str]) -> list:
 
 
 async def crawl_with_simple_html(urls_to_crawl: list[str]) -> list[dict]:
-    tasks = [simple_crawl(url) for url in urls_to_crawl]
+    semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
+
+    async def crawl_one(url: str):
+        async with semaphore:
+            return await simple_crawl(url)
+
+    tasks = [crawl_one(url) for url in urls_to_crawl]
     return await asyncio.gather(*tasks)
 
 
@@ -251,6 +290,14 @@ def format_crawl_result(url: str, page):
         return page, True
 
     if getattr(page, "markdown", None):
+        status_code = getattr(page, "status_code", None)
+        if status_code is not None and not (200 <= status_code < 300):
+            return {
+                "url": url,
+                "status": "failed",
+                "error": f"crawl4ai got HTTP {status_code}",
+                "crawler": "crawl4ai",
+            }, False
         return {
             "url": url,
             "status": "completed",
@@ -277,17 +324,24 @@ async def crawl_pages(data: UrlList):
     pages = await crawl_with_simple_html(urls_to_crawl)
     fallback_reason = None
 
-    if USE_CRAWL4AI_FALLBACK and any(
-        page.get("status") == "failed" for page in pages if isinstance(page, dict)
-    ):
+    weak_indexes = [i for i, page in enumerate(pages) if page_is_weak(page)]
+
+    if USE_CRAWL4AI_FALLBACK and weak_indexes:
+        weak_urls = [urls_to_crawl[i] for i in weak_indexes]
         try:
-            pages = await asyncio.wait_for(
-                crawl_with_crawl4ai(urls_to_crawl),
+            retried = await asyncio.wait_for(
+                crawl_with_crawl4ai(weak_urls),
                 timeout=CRAWL_TOTAL_TIMEOUT,
             )
-            fallback_reason = "simple-html had failed pages; retried with crawl4ai"
+            for i, retried_page in zip(weak_indexes, retried):
+                result, _ = format_crawl_result(urls_to_crawl[i], retried_page)
+                if not page_is_weak(result):
+                    pages[i] = retried_page
+            fallback_reason = (
+                f"{len(weak_urls)} page(s) had thin/failed simple-html content; retried with crawl4ai"
+            )
         except Exception as exc:
-            fallback_reason = f"crawl4ai fallback failed: {exc}"
+            fallback_reason = f"crawl4ai fallback failed for {len(weak_urls)} page(s): {exc}"
 
     results = []
     success_count = 0

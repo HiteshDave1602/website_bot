@@ -124,22 +124,14 @@
     },
     {
       "parameters": {
-        "tableId": "websites"
+        "jsCode": "const website_id = $('Build Crawl Request').first().json.website_id;\nconst pages = Array.isArray($json.pages) ? $json.pages : [];\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 150)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
       },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        1264,
-        1232
-      ],
-      "id": "ba11e43c-28da-4784-b197-1587d27471c0",
-      "name": "Create a row1",
-      "credentials": {
-        "supabaseApi": {
-          "id": "GCtz0rzUQg3X3R0o",
-          "name": "Supabase account 4"
-        }
-      }
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, -80],
+      "id": "format-documents",
+      "name": "Format Documents",
+      "alwaysOutputData": false
     },
     {
       "parameters": {
@@ -215,18 +207,24 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "007f7bc0-1791-41c0-8f58-4dfdedd79f87",
-              "name": "website_id",
-              "value": "={{ $json.body.url.replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/\\.]/g, '-').replace(/-$/, '') }}",
-              "type": "string"
-            }
-          ]
-        },
-        "includeOtherFields": true,
-        "options": {}
+        "dataType": "json",
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "website_id",
+                "value": "={{ $json.metadata.website_id }}"
+              },
+              {
+                "name": "url",
+                "value": "={{ $json.metadata.url }}"
+              }
+            ]
+          }
+        }
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
