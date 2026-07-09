@@ -14,6 +14,7 @@ export default function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/:website_id/chat" element={<ChatRoute />} />
         <Route path="/bot/:website_id" element={<ChatRoute />} />
         <Route path="/chat" element={<ChatRoute />} />
       </Routes>

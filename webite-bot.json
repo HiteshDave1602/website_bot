@@ -45,7 +45,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const website_id = $input.first().json.metadata.website_id;\n\nreturn [{\n  website_id,\n  chatbot_url: `https://website-bot-frontend-mw3g.onrender.com/bot/${website_id}`\n}];"
+        "jsCode": "const website_id = $input.first().json.metadata.website_id;\n\nreturn [{\n  website_id,\n  chatbot_url: `https://website-bot-frontend-1klt.onrender.com/${website_id}/chat`\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
