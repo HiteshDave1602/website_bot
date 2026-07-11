@@ -163,7 +163,7 @@
         "url": "https://website-bot-backend-production.up.railway.app/crawl-pages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { urls: [$json.urls], max_pages: 20 } }}",
+        "jsonBody": "={{ {\n  urls: Array.isArray($json.urls) ? $json.urls : [$json.urls],\n  max_pages: 15\n} }}",
         "options": {
           "timeout": 300000
         }
@@ -284,7 +284,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const pages = Array.isArray($input.first().json.pages) ? $input.first().json.pages : [];\nconst website_id = $input.first().json.website_id || $('Normalize Request1').first().json.website_id;\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 150)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+        "jsCode": "const website_id = $('Normalize Request1').first().json.website_id;\nconst output = [];\n\nfor (const item of $input.all()) {\n  const pages = Array.isArray(item.json.pages)\n    ? item.json.pages\n    : [];\n\n  for (const page of pages) {\n    if (\n      page?.status === 'completed' &&\n      typeof page.markdown === 'string' &&\n      page.markdown.trim().length >= 150\n    ) {\n      output.push({\n        json: {\n          text: page.markdown.trim(),\n          metadata: {\n            website_id,\n            url: page.url,\n          },\n        },\n      });\n    }\n  }\n}\n\nreturn output;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -356,20 +356,6 @@
           "name": "Supabase account 4"
         }
       }
-    },
-    {
-      "parameters": {
-        "fieldToSplitOut": "urls",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [
-        -704,
-        8944
-      ],
-      "id": "8112b780-b438-423e-baa8-b25e1dc2d22e",
-      "name": "Split Out3"
     }
   ],
   "connections": {
@@ -427,7 +413,7 @@
       "main": [
         [
           {
-            "node": "Split Out3",
+            "node": "Crawl Pages1",
             "type": "main",
             "index": 0
           }
@@ -532,17 +518,6 @@
         [
           {
             "node": "Code in JavaScript11",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Out3": {
-      "main": [
-        [
-          {
-            "node": "Crawl Pages1",
             "type": "main",
             "index": 0
           }
