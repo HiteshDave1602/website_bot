@@ -38,10 +38,16 @@ class UrlList(BaseModel):
 
 
 def normalize_url(url: str) -> str:
-    cleaned = (url or "").strip()
+    cleaned = (url or "").strip().strip("'\"")
     if not cleaned:
         raise HTTPException(status_code=400, detail="url must be a non-empty string")
-    return cleaned
+
+    parsed = urlparse(cleaned if re.match(r"^https?://", cleaned, re.I) else f"https://{cleaned}")
+    hostname = parsed.hostname or ""
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or "." not in hostname:
+        raise HTTPException(status_code=400, detail=f"invalid url: {url}")
+
+    return parsed._replace(fragment="").geturl().rstrip("/")
 
 
 class LinkParser(HTMLParser):

@@ -33,12 +33,16 @@ export function extractWebsiteIdFromResult(data) {
 
   try {
     const parsed = new URL(chatbotUrl, window.location.origin);
-    const match = parsed.pathname.match(/\/bot\/([^/]+)\/?$/);
+    const match =
+      parsed.pathname.match(/^\/([^/]+)\/chat\/?$/) ||
+      parsed.pathname.match(/\/bot\/([^/]+)\/?$/);
     if (match?.[1]) {
       return decodeURIComponent(match[1]);
     }
   } catch {
-    const match = chatbotUrl.match(/\/bot\/([^/?#]+)/);
+    const match =
+      chatbotUrl.match(/\/([^/?#]+)\/chat(?:[?#]|$)/) ||
+      chatbotUrl.match(/\/bot\/([^/?#]+)/);
     if (match?.[1]) {
       return decodeURIComponent(match[1]);
     }
@@ -49,11 +53,11 @@ export function extractWebsiteIdFromResult(data) {
 
 export function buildBotPath(websiteId) {
   const normalized = normalizeWebsiteId(websiteId);
-  return normalized ? `/bot/${encodeURIComponent(normalized)}` : '/chat';
+  return normalized ? `/${encodeURIComponent(normalized)}/chat` : '/chat';
 }
 
 export function buildBotUrl(websiteId, origin = window.location.origin) {
   const normalized = normalizeWebsiteId(websiteId);
   const base = origin.replace(/\/+$/, '');
-  return normalized ? `${base}/bot/${encodeURIComponent(normalized)}` : `${base}/chat`;
+  return normalized ? `${base}/${encodeURIComponent(normalized)}/chat` : `${base}/chat`;
 }
