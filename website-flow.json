@@ -48,27 +48,13 @@
     },
     {
       "parameters": {
-        "textSplittingMode": "custom",
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
         "options": {
-          "metadata": {
-            "metadataValues": [
-              {
-                "name": "website_id",
-                "value": "={{ $json.metadata.website_id }}"
-              },
-              {
-                "name": "url",
-                "value": "={{ $json.metadata.url }}"
-              },
-              {
-                "name": "title",
-                "value": "={{ $json.metadata.title }}"
-              }
-            ]
-          }
+          "responseCode": "={{ $json.statusCode || 400 }}"
         }
       },
-      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
         -1184,
@@ -108,11 +94,10 @@
     },
     {
       "parameters": {
-        "chunkSize": 1500,
-        "chunkOverlap": 300,
-        "options": {}
+        "tableId": "websites",
+        "dataToSend": "autoMapInputData"
       },
-      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
         -736,
@@ -130,7 +115,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const website_id = $('Edit Fields').first().json.website_id || $('domain-url/wesiteID1').first().json.website_id;\n\nreturn [{\n  json: {\n    website_id,\n    chatbot_url: `http://localhost:5175/bot/${website_id}`\n  }\n}];"
+        "operation": "delete",
+        "tableId": "crawled_pages",
+        "filterType": "string",
+        "filterString": "=metadata->>website_id=eq.{{ $json.website_id }}"
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
@@ -175,7 +163,7 @@
         "url": "https://website-bot-backend-production.up.railway.app/crawl-pages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { urls: [$json.urls], max_pages: 20 } }}",
+        "jsonBody": "={{ {\n  urls: Array.isArray($json.urls) ? $json.urls : [$json.urls],\n  max_pages: 15\n} }}",
         "options": {
           "timeout": 300000
         }
@@ -296,7 +284,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const pages = Array.isArray($input.first().json.pages) ? $input.first().json.pages : [];\nconst website_id = $input.first().json.website_id || $('Normalize Request1').first().json.website_id;\n\nreturn pages\n  .filter(page => page && typeof page.markdown === 'string' && page.markdown.trim().length >= 150)\n  .map(page => ({\n    json: {\n      text: page.markdown.trim(),\n      metadata: {\n        website_id,\n        url: page.url\n      }\n    }\n  }));"
+        "jsCode": "const website_id = $('Normalize Request1').first().json.website_id;\nconst output = [];\n\nfor (const item of $input.all()) {\n  const pages = Array.isArray(item.json.pages)\n    ? item.json.pages\n    : [];\n\n  for (const page of pages) {\n    if (\n      page?.status === 'completed' &&\n      typeof page.markdown === 'string' &&\n      page.markdown.trim().length >= 150\n    ) {\n      output.push({\n        json: {\n          text: page.markdown.trim(),\n          metadata: {\n            website_id,\n            url: page.url,\n          },\n        },\n      });\n    }\n  }\n}\n\nreturn output;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -368,20 +356,6 @@
           "name": "Supabase account 4"
         }
       }
-    },
-    {
-      "parameters": {
-        "fieldToSplitOut": "urls",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [
-        -704,
-        8944
-      ],
-      "id": "8112b780-b438-423e-baa8-b25e1dc2d22e",
-      "name": "Split Out3"
     }
   ],
   "connections": {
@@ -439,7 +413,7 @@
       "main": [
         [
           {
-            "node": "Split Out3",
+            "node": "Crawl Pages1",
             "type": "main",
             "index": 0
           }
@@ -544,17 +518,6 @@
         [
           {
             "node": "Code in JavaScript11",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Out3": {
-      "main": [
-        [
-          {
-            "node": "Crawl Pages1",
             "type": "main",
             "index": 0
           }
