@@ -14,6 +14,8 @@ create table if not exists public.websites (
 create table if not exists public.crawled_pages (
   id bigint generated always as identity primary key,
   content text,
+  website_id text,
+  url text,
   metadata jsonb,
   embedding vector(3072)
 );
@@ -24,7 +26,11 @@ create index if not exists crawled_pages_embedding_idx
 
 create index if not exists crawled_pages_website_id_idx
   on public.crawled_pages
-  using btree ((metadata ->> 'website_id'));
+  using btree (website_id);
+
+create index if not exists crawled_pages_url_idx
+  on public.crawled_pages
+  using btree (url);
 
 -- Tenant-scoped similarity search, called by n8n's Supabase Vector Store node.
 create or replace function public.match_documents (
