@@ -379,7 +379,7 @@
 .chat-page {
   flex: 1;
   display: flex;
-  height: calc(100vh - var(--navbar-height));
+  height: 100vh;
   overflow: hidden;
 }
 
@@ -451,7 +451,7 @@
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
-    top: var(--navbar-height);
+    top: 0;
     left: 0;
     bottom: 0;
     z-index: 50;
