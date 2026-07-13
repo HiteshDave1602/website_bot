@@ -14,6 +14,12 @@ export default function ChatInput({ websiteId }) {
     }
   }, [input]);
 
+  useEffect(() => {
+    if (!isLoading) {
+      textareaRef.current?.focus();
+    }
+  }, [isLoading]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     const trimmed = input.trim();
