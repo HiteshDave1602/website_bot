@@ -1,10 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChat } from '../context/useChat';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+
 
 export default function ChatInput({ websiteId }) {
   const [input, setInput] = useState('');
   const textareaRef = useRef(null);
+  const inputBeforeListeningRef = useRef('');
   const { sendMessage, isLoading } = useChat();
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (!listening) return;
+
+    setInput(`${inputBeforeListeningRef.current}${transcript}`);
+  }, [listening, transcript]);
+
+  useEffect(() => () => SpeechRecognition.stopListening(), []);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -39,6 +56,17 @@ export default function ChatInput({ websiteId }) {
     }
   }
 
+  function toggleListening() {
+    if (listening) {
+      SpeechRecognition.stopListening();
+      return;
+    }
+
+    inputBeforeListeningRef.current = input ? `${input.trimEnd()} ` : '';
+    resetTranscript();
+    SpeechRecognition.startListening({ continuous: true });
+  }
+
   return (
     <form className="chat-input" onSubmit={handleSubmit}>
       <div className="chat-input-wrapper">
@@ -52,6 +80,24 @@ export default function ChatInput({ websiteId }) {
           disabled={isLoading}
           className="chat-input-field"
         />
+        {browserSupportsSpeechRecognition && (
+          <button
+            type="button"
+            className={`chat-mic-btn${listening ? ' chat-mic-btn--listening' : ''}`}
+            onClick={toggleListening}
+            disabled={isLoading}
+            title={listening ? 'Stop voice input' : 'Start voice input'}
+            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+            aria-pressed={listening}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0" />
+              <line x1="12" y1="17" x2="12" y2="22" />
+              <line x1="8" y1="22" x2="16" y2="22" />
+            </svg>
+          </button>
+        )}
         <button
           type="submit"
           className="chat-send-btn"
