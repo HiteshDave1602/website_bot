@@ -7,6 +7,7 @@ export default function ChatInput({ websiteId }) {
   const [input, setInput] = useState('');
   const textareaRef = useRef(null);
   const inputBeforeListeningRef = useRef('');
+  const silenceTimerRef = useRef(null);
   const { sendMessage, isLoading } = useChat();
   const {
     transcript,
@@ -21,7 +22,30 @@ export default function ChatInput({ websiteId }) {
     setInput(`${inputBeforeListeningRef.current}${transcript}`);
   }, [listening, transcript]);
 
-  useEffect(() => () => SpeechRecognition.stopListening(), []);
+  useEffect(() => {
+    if (!transcript.trim() || isLoading) return undefined;
+
+    const spokenMessage = `${inputBeforeListeningRef.current}${transcript}`.trim();
+    silenceTimerRef.current = setTimeout(async () => {
+      SpeechRecognition.stopListening();
+
+      try {
+        await sendMessage(spokenMessage, websiteId);
+        setInput('');
+        inputBeforeListeningRef.current = '';
+        resetTranscript();
+      } catch {
+        // Error state is handled by ChatContext.
+      }
+    }, 5000);
+
+    return () => clearTimeout(silenceTimerRef.current);
+  }, [isLoading, resetTranscript, sendMessage, transcript, websiteId]);
+
+  useEffect(() => () => {
+    clearTimeout(silenceTimerRef.current);
+    SpeechRecognition.stopListening();
+  }, []);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -39,6 +63,8 @@ export default function ChatInput({ websiteId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    clearTimeout(silenceTimerRef.current);
+    SpeechRecognition.stopListening();
     const trimmed = input.trim();
     if (!trimmed || isLoading) return;
     try {
@@ -62,6 +88,7 @@ export default function ChatInput({ websiteId }) {
       return;
     }
 
+    clearTimeout(silenceTimerRef.current);
     inputBeforeListeningRef.current = input ? `${input.trimEnd()} ` : '';
     resetTranscript();
     SpeechRecognition.startListening({ continuous: true });
@@ -73,7 +100,10 @@ export default function ChatInput({ websiteId }) {
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            clearTimeout(silenceTimerRef.current);
+            setInput(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Ask anything about the website..."
           rows={1}
