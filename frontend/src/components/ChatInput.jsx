@@ -82,16 +82,20 @@ export default function ChatInput({ websiteId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed || isLoading || sendInProgressRef.current) return;
+
+    // Lock immediately so clicking the icon and pressing Enter cannot overlap.
+    sendInProgressRef.current = true;
     clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = null;
     voiceSessionActiveRef.current = false;
-    const trimmed = input.trim();
-    await SpeechRecognition.stopListening();
-    if (!trimmed || isLoading || sendInProgressRef.current) return;
 
-    sendInProgressRef.current = true;
-    resetTranscript();
     try {
+      if (listening) {
+        await SpeechRecognition.stopListening();
+      }
+      resetTranscript();
       await sendMessage(trimmed, websiteId);
       setInput('');
     } catch {
@@ -102,9 +106,9 @@ export default function ChatInput({ websiteId }) {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      handleSubmit(e);
+      e.currentTarget.form?.requestSubmit();
     }
   }
 
