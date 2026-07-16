@@ -5,6 +5,8 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 
 export default function ChatInput({ websiteId }) {
   const [input, setInput] = useState('');
+  const [speechError, setSpeechError] = useState('');
+  const [voiceRequested, setVoiceRequested] = useState(false);
   const textareaRef = useRef(null);
   const inputBeforeListeningRef = useRef('');
   const silenceTimerRef = useRef(null);
@@ -14,7 +16,13 @@ export default function ChatInput({ websiteId }) {
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition,
+    browserSupportsContinuousListening,
+    isMicrophoneAvailable,
   } = useSpeechRecognition();
+
+  const microphoneError = voiceRequested && !isMicrophoneAvailable
+    ? 'Microphone access was blocked. Allow it in your browser site settings, then try again.'
+    : '';
 
   useEffect(() => {
     if (!listening) return;
@@ -82,16 +90,59 @@ export default function ChatInput({ websiteId }) {
     }
   }
 
-  function toggleListening() {
+  async function toggleListening() {
     if (listening) {
-      SpeechRecognition.stopListening();
+      await SpeechRecognition.stopListening();
+      return;
+    }
+
+    setVoiceRequested(true);
+    setSpeechError('');
+
+    if (!window.isSecureContext) {
+      setSpeechError('Voice input requires HTTPS. Open the secure https:// version of this page.');
+      return;
+    }
+
+    const permissionsPolicy = document.permissionsPolicy || document.featurePolicy;
+    if (
+      window.self !== window.top
+      && permissionsPolicy?.allowsFeature
+      && !permissionsPolicy.allowsFeature('microphone')
+    ) {
+      setSpeechError('This embedded chat is not allowed to use the microphone. Add allow="microphone" to its iframe.');
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setSpeechError('Microphone access is not available in this browser. Try the latest Chrome or Edge.');
       return;
     }
 
     clearTimeout(silenceTimerRef.current);
     inputBeforeListeningRef.current = input ? `${input.trimEnd()} ` : '';
     resetTranscript();
-    SpeechRecognition.startListening({ continuous: true });
+
+    try {
+      // Request permission for the deployed origin before starting Web Speech.
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+
+      await SpeechRecognition.startListening({
+        continuous: browserSupportsContinuousListening,
+        language: navigator.language || 'en-US',
+      });
+    } catch (error) {
+      if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+        setSpeechError('Microphone permission was denied. Allow it in your browser site settings, then try again.');
+      } else if (error?.name === 'NotFoundError') {
+        setSpeechError('No microphone was found on this device.');
+      } else if (error?.name === 'NotReadableError') {
+        setSpeechError('The microphone is being used by another app. Close it and try again.');
+      } else {
+        setSpeechError('Voice recognition could not start. Check your connection and try again in Chrome or Edge.');
+      }
+    }
   }
 
   return (
@@ -144,6 +195,11 @@ export default function ChatInput({ websiteId }) {
           )}
         </button>
       </div>
+      {(speechError || microphoneError) && (
+        <p className="chat-voice-error" role="alert">
+          {speechError || microphoneError}
+        </p>
+      )}
     </form>
   );
 }
