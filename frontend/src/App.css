@@ -864,6 +864,14 @@
   cursor: not-allowed;
 }
 
+.chat-voice-error {
+  max-width: 720px;
+  margin: 8px auto 0;
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 @keyframes mic-pulse {
   50% {
     box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.2);
