@@ -10,6 +10,8 @@ export default function ChatInput({ websiteId }) {
   const textareaRef = useRef(null);
   const inputBeforeListeningRef = useRef('');
   const silenceTimerRef = useRef(null);
+  const voiceSessionActiveRef = useRef(false);
+  const sendInProgressRef = useRef(false);
   const { sendMessage, isLoading } = useChat();
   const {
     transcript,
@@ -31,19 +33,28 @@ export default function ChatInput({ websiteId }) {
   }, [listening, transcript]);
 
   useEffect(() => {
-    if (!transcript.trim() || isLoading) return undefined;
+    if (!voiceSessionActiveRef.current || !transcript.trim() || isLoading) return undefined;
 
     const spokenMessage = `${inputBeforeListeningRef.current}${transcript}`.trim();
     silenceTimerRef.current = setTimeout(async () => {
-      SpeechRecognition.stopListening();
+      if (!voiceSessionActiveRef.current || sendInProgressRef.current) return;
+
+      // Consume this voice session before changing React state. Otherwise the
+      // retained transcript can schedule another send when loading finishes.
+      voiceSessionActiveRef.current = false;
+      sendInProgressRef.current = true;
+      silenceTimerRef.current = null;
+      await SpeechRecognition.stopListening();
+      setInput('');
+      inputBeforeListeningRef.current = '';
+      resetTranscript();
 
       try {
         await sendMessage(spokenMessage, websiteId);
-        setInput('');
-        inputBeforeListeningRef.current = '';
-        resetTranscript();
       } catch {
         // Error state is handled by ChatContext.
+      } finally {
+        sendInProgressRef.current = false;
       }
     }, 5000);
 
@@ -72,14 +83,21 @@ export default function ChatInput({ websiteId }) {
   async function handleSubmit(e) {
     e.preventDefault();
     clearTimeout(silenceTimerRef.current);
-    SpeechRecognition.stopListening();
+    silenceTimerRef.current = null;
+    voiceSessionActiveRef.current = false;
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    await SpeechRecognition.stopListening();
+    if (!trimmed || isLoading || sendInProgressRef.current) return;
+
+    sendInProgressRef.current = true;
+    resetTranscript();
     try {
       await sendMessage(trimmed, websiteId);
       setInput('');
     } catch {
       // Error state is handled by ChatContext.
+    } finally {
+      sendInProgressRef.current = false;
     }
   }
 
@@ -128,11 +146,13 @@ export default function ChatInput({ websiteId }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
 
+      voiceSessionActiveRef.current = true;
       await SpeechRecognition.startListening({
         continuous: browserSupportsContinuousListening,
         language: navigator.language || 'en-US',
       });
     } catch (error) {
+      voiceSessionActiveRef.current = false;
       if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
         setSpeechError('Microphone permission was denied. Allow it in your browser site settings, then try again.');
       } else if (error?.name === 'NotFoundError') {
